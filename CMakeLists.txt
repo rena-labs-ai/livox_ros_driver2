@@ -93,23 +93,16 @@ ament_auto_add_library(${PROJECT_NAME} SHARED
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${livox_sdk_INCLUDE_DIRS})
 
-# get include directories of custom msg headers
-if(HUMBLE_ROS STREQUAL "humble")
-  rosidl_get_typesupport_target(cpp_typesupport_target
+# Ensure generated interfaces are available when building this library
+rosidl_get_typesupport_target(livox_interfaces_cpp_target
   ${LIVOX_INTERFACES} "rosidl_typesupport_cpp")
-  target_link_libraries(${PROJECT_NAME} "${cpp_typesupport_target}")
-else()
-  set(LIVOX_INTERFACE_TARGET "${LIVOX_INTERFACES}__rosidl_typesupport_cpp")
-  add_dependencies(${PROJECT_NAME} ${LIVOX_INTERFACES})
-  get_target_property(LIVOX_INTERFACES_INCLUDE_DIRECTORIES ${LIVOX_INTERFACE_TARGET} INTERFACE_INCLUDE_DIRECTORIES)
-endif()
+add_dependencies(${PROJECT_NAME} ${LIVOX_INTERFACES})
 
 # include file direcotry
 target_include_directories(${PROJECT_NAME} PUBLIC
   ${PCL_INCLUDE_DIRS}
   ${APR_INCLUDE_DIRS}
   ${LIVOX_LIDAR_SDK_INCLUDE_DIR}
-  ${LIVOX_INTERFACES_INCLUDE_DIRECTORIES}   # for custom msgs
   3rdparty
   src
 )
@@ -117,7 +110,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 # link libraries
 target_link_libraries(${PROJECT_NAME}
   ${LIVOX_LIDAR_SDK_LIBRARY}
-  ${LIVOX_INTERFACE_TARGET}   # for custom msgs
+  ${livox_interfaces_cpp_target}   # for custom msgs
   ${PPT_LIBRARY}
   ${Boost_LIBRARY}
   ${PCL_LIBRARIES}
