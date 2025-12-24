@@ -122,6 +122,27 @@ rclcpp_components_register_node(${PROJECT_NAME}
   EXECUTABLE ${PROJECT_NAME}_node
 )
 
+# ---------------------------------------------------------------------------------------
+# Extra utility node: CustomMsg -> PointCloud2 (raw inspection, RViz-friendly)
+# ---------------------------------------------------------------------------------------
+add_executable(livox_custom_to_pointcloud2 src/livox_custom_to_pointcloud2.cpp)
+target_compile_features(livox_custom_to_pointcloud2 PUBLIC cxx_std_14)
+
+# This node uses the generated CustomMsg type and publishes PointCloud2.
+ament_target_dependencies(livox_custom_to_pointcloud2
+  rclcpp
+  sensor_msgs
+)
+add_dependencies(livox_custom_to_pointcloud2 ${LIVOX_INTERFACES})
+
+target_include_directories(livox_custom_to_pointcloud2 PUBLIC
+  ${LIVOX_INTERFACES_INCLUDE_DIRECTORIES}
+)
+
+install(TARGETS livox_custom_to_pointcloud2
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights
