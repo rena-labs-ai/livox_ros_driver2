@@ -32,6 +32,10 @@
 #include <math.h>
 #include <stdint.h>
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 #include "include/ros_headers.h"
 
 #include "driver_node.h"
@@ -42,7 +46,8 @@ namespace livox_ros {
 /** Lidar Data Distribute Control--------------------------------------------*/
 #ifdef BUILDING_ROS1
 Lddc::Lddc(int format, int multi_topic, int data_src, int output_type,
-    double frq, std::string &frame_id, bool lidar_bag, bool imu_bag)
+    double frq, std::string &frame_id, bool lidar_bag, bool imu_bag,
+    bool enable_filter, double angle_min, double angle_max)
     : transfer_format_(format),
       use_multi_topic_(multi_topic),
       data_src_(data_src),
@@ -50,7 +55,10 @@ Lddc::Lddc(int format, int multi_topic, int data_src, int output_type,
       publish_frq_(frq),
       frame_id_(frame_id),
       enable_lidar_bag_(lidar_bag),
-      enable_imu_bag_(imu_bag) {
+      enable_imu_bag_(imu_bag),
+      enable_filter_(enable_filter),
+      angle_min_(angle_min),
+      angle_max_(angle_max) {
   publish_period_ns_ = kNsPerSecond / publish_frq_;
   lds_ = nullptr;
   memset(private_pub_, 0, sizeof(private_pub_));
@@ -62,13 +70,17 @@ Lddc::Lddc(int format, int multi_topic, int data_src, int output_type,
 }
 #elif defined BUILDING_ROS2
 Lddc::Lddc(int format, int multi_topic, int data_src, int output_type,
-           double frq, std::string &frame_id)
+           double frq, std::string &frame_id, bool enable_filter, 
+           double angle_min, double angle_max)
     : transfer_format_(format),
       use_multi_topic_(multi_topic),
       data_src_(data_src),
       output_type_(output_type),
       publish_frq_(frq),
-      frame_id_(frame_id) {
+      frame_id_(frame_id),
+      enable_filter_(enable_filter),
+      angle_min_(angle_min),
+      angle_max_(angle_max) {
   publish_period_ns_ = kNsPerSecond / publish_frq_;
   lds_ = nullptr;
 #if 0
@@ -300,9 +312,6 @@ void Lddc::InitPointcloud2Msg(const StoragePacket& pkg, PointCloud2& cloud, uint
 
   cloud.point_step = sizeof(LivoxPointXyzrtlt);
 
-  cloud.width = pkg.points_num;
-  cloud.row_step = cloud.width * cloud.point_step;
-
   cloud.is_bigendian = false;
   cloud.is_dense     = true;
 
@@ -318,6 +327,12 @@ void Lddc::InitPointcloud2Msg(const StoragePacket& pkg, PointCloud2& cloud, uint
 
   std::vector<LivoxPointXyzrtlt> points;
   for (size_t i = 0; i < pkg.points_num; ++i) {
+    if (enable_filter_) {
+      double angle = atan2(pkg.points[i].y, pkg.points[i].x) * 180.0 / M_PI;
+      if (angle < angle_min_ || angle > angle_max_) {
+        continue;
+      }
+    }
     LivoxPointXyzrtlt point;
     point.x = pkg.points[i].x;
     point.y = pkg.points[i].y;
@@ -328,8 +343,10 @@ void Lddc::InitPointcloud2Msg(const StoragePacket& pkg, PointCloud2& cloud, uint
     point.timestamp = static_cast<double>(pkg.points[i].offset_time);
     points.push_back(std::move(point));
   }
-  cloud.data.resize(pkg.points_num * sizeof(LivoxPointXyzrtlt));
-  memcpy(cloud.data.data(), points.data(), pkg.points_num * sizeof(LivoxPointXyzrtlt));
+  cloud.width = points.size();
+  cloud.row_step = cloud.width * cloud.point_step;
+  cloud.data.resize(points.size() * sizeof(LivoxPointXyzrtlt));
+  memcpy(cloud.data.data(), points.data(), points.size() * sizeof(LivoxPointXyzrtlt));
 }
 
 void Lddc::PublishPointcloud2Data(const uint8_t index, const uint64_t timestamp, const PointCloud2& cloud) {
@@ -385,6 +402,12 @@ void Lddc::FillPointsToCustomMsg(CustomMsg& livox_msg, const StoragePacket& pkg)
   uint32_t points_num = pkg.points_num;
   const std::vector<PointXyzlt>& points = pkg.points;
   for (uint32_t i = 0; i < points_num; ++i) {
+    if (enable_filter_) {
+      double angle = atan2(points[i].y, points[i].x) * 180.0 / M_PI;
+      if (angle < angle_min_ || angle > angle_max_) {
+        continue;
+      }
+    }
     CustomPoint point;
     point.x = points[i].x;
     point.y = points[i].y;
@@ -396,6 +419,7 @@ void Lddc::FillPointsToCustomMsg(CustomMsg& livox_msg, const StoragePacket& pkg)
 
     livox_msg.points.push_back(std::move(point));
   }
+  livox_msg.point_num = livox_msg.points.size();
 }
 
 void Lddc::PublishCustomPointData(const CustomMsg& livox_msg, const uint8_t index) {
@@ -443,6 +467,12 @@ void Lddc::FillPointsToPclMsg(const StoragePacket& pkg, PointCloud& pcl_msg) {
   uint32_t points_num = pkg.points_num;
   const std::vector<PointXyzlt>& points = pkg.points;
   for (uint32_t i = 0; i < points_num; ++i) {
+    if (enable_filter_) {
+      double angle = atan2(points[i].y, points[i].x) * 180.0 / M_PI;
+      if (angle < angle_min_ || angle > angle_max_) {
+        continue;
+      }
+    }
     pcl::PointXYZI point;
     point.x = points[i].x;
     point.y = points[i].y;
@@ -451,6 +481,7 @@ void Lddc::FillPointsToPclMsg(const StoragePacket& pkg, PointCloud& pcl_msg) {
 
     pcl_msg.points.push_back(std::move(point));
   }
+  pcl_msg.width = pcl_msg.points.size();
 #elif defined BUILDING_ROS2
   std::cout << "warning: pcl::PointCloud is not supported in ROS2, "
             << "please check code logic" 

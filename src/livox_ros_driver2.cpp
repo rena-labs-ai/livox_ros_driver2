@@ -69,6 +69,13 @@ int main(int argc, char **argv) {
   livox_node.GetNode().getParam("enable_lidar_bag", lidar_bag);
   livox_node.GetNode().getParam("enable_imu_bag", imu_bag);
 
+  bool enable_filter = false;
+  double angle_min = -180.0;
+  double angle_max = 180.0;
+  livox_node.GetNode().getParam("enable_filter", enable_filter);
+  livox_node.GetNode().getParam("angle_min", angle_min);
+  livox_node.GetNode().getParam("angle_max", angle_max);
+
   printf("data source:%u.\n", data_src);
 
   if (publish_freq > 100.0) {
@@ -83,7 +90,8 @@ int main(int argc, char **argv) {
 
   /** Lidar data distribute control and lidar data source set */
   livox_node.lddc_ptr_ = std::make_unique<Lddc>(xfer_format, multi_topic, data_src, output_type,
-                        publish_freq, frame_id, lidar_bag, imu_bag);
+                        publish_freq, frame_id, lidar_bag, imu_bag,
+                        enable_filter, angle_min, angle_max);
   livox_node.lddc_ptr_->SetRosNode(&livox_node);
 
   if (data_src == kSourceRawLidar) {
@@ -137,6 +145,9 @@ DriverNode::DriverNode(const rclcpp::NodeOptions & node_options)
   this->declare_parameter("user_config_path", "path_default");
   this->declare_parameter("cmdline_input_bd_code", "000000000000001");
   this->declare_parameter("lvx_file_path", "/home/livox/livox_test.lvx");
+  this->declare_parameter("enable_filter", false);
+  this->declare_parameter("angle_min", -180.0);
+  this->declare_parameter("angle_max", 180.0);
 
   this->get_parameter("xfer_format", xfer_format);
   this->get_parameter("multi_topic", multi_topic);
@@ -144,6 +155,13 @@ DriverNode::DriverNode(const rclcpp::NodeOptions & node_options)
   this->get_parameter("publish_freq", publish_freq);
   this->get_parameter("output_data_type", output_type);
   this->get_parameter("frame_id", frame_id);
+
+  bool enable_filter = false;
+  double angle_min = -180.0;
+  double angle_max = 180.0;
+  this->get_parameter("enable_filter", enable_filter);
+  this->get_parameter("angle_min", angle_min);
+  this->get_parameter("angle_max", angle_max);
 
   if (publish_freq > 100.0) {
     publish_freq = 100.0;
@@ -156,8 +174,25 @@ DriverNode::DriverNode(const rclcpp::NodeOptions & node_options)
   future_ = exit_signal_.get_future();
 
   /** Lidar data distribute control and lidar data source set */
-  lddc_ptr_ = std::make_unique<Lddc>(xfer_format, multi_topic, data_src, output_type, publish_freq, frame_id);
+  lddc_ptr_ = std::make_unique<Lddc>(xfer_format, multi_topic, data_src, output_type, 
+                                    publish_freq, frame_id, enable_filter, angle_min, angle_max);
   lddc_ptr_->SetRosNode(this);
+
+  parameter_callback_handle_ = this->add_on_set_parameters_callback(
+    [this](const std::vector<rclcpp::Parameter> &parameters) {
+      rcl_interfaces::msg::SetParametersResult result;
+      result.successful = true;
+      for (const auto &param : parameters) {
+        if (param.get_name() == "enable_filter") {
+          lddc_ptr_->SetEnableFilter(param.as_bool());
+        } else if (param.get_name() == "angle_min") {
+          lddc_ptr_->SetAngleMin(param.as_double());
+        } else if (param.get_name() == "angle_max") {
+          lddc_ptr_->SetAngleMax(param.as_double());
+        }
+      }
+      return result;
+    });
 
   if (data_src == kSourceRawLidar) {
     DRIVER_INFO(*this, "Data Source is raw lidar.");

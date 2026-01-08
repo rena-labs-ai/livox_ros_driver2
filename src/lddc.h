@@ -73,10 +73,11 @@ class Lddc final {
  public:
 #ifdef BUILDING_ROS1
   Lddc(int format, int multi_topic, int data_src, int output_type, double frq,
-      std::string &frame_id, bool lidar_bag, bool imu_bag);
+      std::string &frame_id, bool lidar_bag, bool imu_bag, bool enable_filter, 
+      double angle_min, double angle_max);
 #elif defined BUILDING_ROS2
   Lddc(int format, int multi_topic, int data_src, int output_type, double frq,
-      std::string &frame_id);
+      std::string &frame_id, bool enable_filter, double angle_min, double angle_max);
 #endif
   ~Lddc();
 
@@ -92,6 +93,10 @@ class Lddc final {
 
   // void SetRosPub(ros::Publisher *pub) { global_pub_ = pub; };  // NOT USED
   void SetPublishFrq(uint32_t frq) { publish_frq_ = frq; }
+  
+  void SetEnableFilter(bool enable) { enable_filter_ = enable; }
+  void SetAngleMin(double angle_min) { angle_min_ = angle_min; }
+  void SetAngleMax(double angle_max) { angle_max_ = angle_max; }
 
  public:
   Lds *lds_;
@@ -139,6 +144,9 @@ class Lddc final {
   double publish_frq_;
   uint32_t publish_period_ns_;
   std::string frame_id_;
+  bool enable_filter_;
+  double angle_min_;
+  double angle_max_;
 
 #ifdef BUILDING_ROS1
   bool enable_lidar_bag_;

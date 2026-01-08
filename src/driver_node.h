@@ -70,6 +70,7 @@ class DriverNode final : public rclcpp::Node {
   std::shared_ptr<std::thread> imudata_poll_thread_;
   std::shared_future<void> future_;
   std::promise<void> exit_signal_;
+  rclcpp::Node::OnSetParametersCallbackHandle::SharedPtr parameter_callback_handle_;
 };
 #endif
 
